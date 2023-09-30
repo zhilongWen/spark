@@ -29,10 +29,10 @@ import org.apache.spark.serializer.JavaSerializer
 import org.apache.spark.util.Utils
 
 private[spark] class ParallelCollectionPartition[T: ClassTag](
-    var rddId: Long,
-    var slice: Int,
-    var values: Seq[T]
-  ) extends Partition with Serializable {
+                                                               var rddId: Long,
+                                                               var slice: Int,
+                                                               var values: Seq[T]
+                                                             ) extends Partition with Serializable {
 
   def iterator: Iterator[T] = values.iterator
 
@@ -82,17 +82,18 @@ private[spark] class ParallelCollectionPartition[T: ClassTag](
 }
 
 private[spark] class ParallelCollectionRDD[T: ClassTag](
-    sc: SparkContext,
-    @transient private val data: Seq[T],
-    numSlices: Int,
-    locationPrefs: Map[Int, Seq[String]])
-    extends RDD[T](sc, Nil) {
+                                                         sc: SparkContext,
+                                                         @transient private val data: Seq[T],
+                                                         numSlices: Int,
+                                                         locationPrefs: Map[Int, Seq[String]])
+  extends RDD[T](sc, Nil) {
   // TODO: Right now, each split sends along its full data, even if later down the RDD chain it gets
   // cached. It might be worthwhile to write the data to a file in the DFS and read it in the split
   // instead.
   // UPDATE: A parallel collection can be checkpointed to HDFS, which achieves this goal.
 
   override def getPartitions: Array[Partition] = {
+    // slice 方法判断数据应该放入那个分片段
     val slices = ParallelCollectionRDD.slice(data, numSlices).toArray
     slices.indices.map(i => new ParallelCollectionPartition(id, i, slices(i))).toArray
   }
@@ -117,15 +118,37 @@ private object ParallelCollectionRDD {
     if (numSlices < 1) {
       throw new IllegalArgumentException("Positive number of partitions required")
     }
+
     // Sequences need to be sliced at the same set of index positions for operations
     // like RDD.zip() to behave as expected
     def positions(length: Long, numSlices: Int): Iterator[(Int, Int)] = {
+
+      // seq = 1,2,3,4,5
+      // length = 5
+      // numSlices = 3
+
       (0 until numSlices).iterator.map { i =>
-        val start = ((i * length) / numSlices).toInt
+
+        // start = (0 * 5) / 3 = 0
+        // end = ((0 + 1) * 5) / 3 = 1
+        // => (0,1) => 1
+
+        // start = (1 * 5) / 3 = 1
+        // end = ((1 + 1) * 5) / 3 = 3
+        // => (1,3) => 2,3
+
+        // start = (2 * 5) / 3 = 3
+        // end = ((2 + 1) * 5) / 3 = 5
+        // => (3,5) => 4,5
+
+
+
+      val start = ((i * length) / numSlices).toInt
         val end = (((i + 1) * length) / numSlices).toInt
         (start, end)
       }
     }
+
     seq match {
       case r: Range =>
         positions(r.length, numSlices).zipWithIndex.map { case ((start, end), index) =>
@@ -147,9 +170,27 @@ private object ParallelCollectionRDD {
         }
         slices.toSeq
       case _ =>
+
+        // seq = 1,2,3,4,5
+        // numSlices = 3
+
         val array = seq.toArray // To prevent O(n^2) operations for List etc
         positions(array.length, numSlices).map { case (start, end) =>
-            array.slice(start, end).toSeq
+
+          array.slice(start, end).toSeq
+
+          //   override def slice(from: Int, until: Int): Array[T] = {
+          //     val reprVal = repr
+          //     val lo = math.max(from, 0)
+          //     val hi = math.min(math.max(until, 0), reprVal.length)
+          //     val size = math.max(hi - lo, 0)
+          //     val result = java.lang.reflect.Array.newInstance(elementClass, size)
+          //     if (size > 0) {
+          //      Array.copy(reprVal, lo, result, 0, size)
+          //     }
+          //     result.asInstanceOf[Array[T]]
+          //  }
+
         }.toSeq
     }
   }

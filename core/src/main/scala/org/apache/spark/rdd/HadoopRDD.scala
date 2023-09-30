@@ -205,6 +205,18 @@ class HadoopRDD[K, V](
     // add the credentials here as this can be called before SparkContext initialized
     SparkHadoopUtil.get.addCredentials(jobConf)
     try {
+
+      // 文件大小 = 7 字节
+      // 最小分区 = 2
+
+      // 通过 org.apache.hadoop.mapred.FileInputFormat.getSplits 切分文件
+      // 1.计算文件大小 totalSize = 7
+      // 2.计算每个分区的字节数
+      //         goalSize = totalSize / (long)(numSplits == 0 ? 1 : numSplits) = 7 / 2 = 3 (byte)
+      // 3.切分文件的数量 = 7 / 3 = 2 ... 1
+      // 4.剩余数据大小与每个文件的大小比较 3 byte， > 10% 生成一个新的文件，< 10% 将剩余的数据放入最后一个分区中
+      // 因此分为 3 个分区
+
       val allInputSplits = getInputFormat(jobConf).getSplits(jobConf, minPartitions)
       val inputSplits = if (ignoreEmptySplits) {
         allInputSplits.filter(_.getLength > 0)
