@@ -114,6 +114,7 @@ class HashPartitioner(partitions: Int) extends Partitioner {
 
   def numPartitions: Int = partitions
 
+  // 根据数据的 key 分区，key == null 0 分区，key != null 取 hash
   def getPartition(key: Any): Int = key match {
     case null => 0
     case _ => Utils.nonNegativeMod(key.hashCode, numPartitions)
