@@ -1031,6 +1031,7 @@ abstract class RDD[T: ClassTag](
    */
   def toLocalIterator: Iterator[T] = withScope {
     def collectPartition(p: Int): Array[T] = {
+      // runJob 提交作业
       sc.runJob(this, (iter: Iterator[T]) => iter.toArray, Seq(p)).head
     }
     partitions.indices.iterator.flatMap(i => collectPartition(i))

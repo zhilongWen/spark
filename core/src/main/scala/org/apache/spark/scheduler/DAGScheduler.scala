@@ -455,6 +455,7 @@ private[spark] class DAGScheduler(
           }
         }
         // Finally, create a stage for the given shuffle dependency.
+        // 创建最终的阶段
         createShuffleMapStage(shuffleDep, firstJobId)
     }
   }
@@ -616,13 +617,20 @@ private[spark] class DAGScheduler(
       partitions: Array[Int],
       jobId: Int,
       callSite: CallSite): ResultStage = {
+
+    // 获取当前 RDD 的所有宽依赖
     val (shuffleDeps, resourceProfiles) = getShuffleDependenciesAndResourceProfiles(rdd)
+
     val resourceProfile = mergeResourceProfilesForStage(resourceProfiles)
     checkBarrierStageWithDynamicAllocation(rdd)
     checkBarrierStageWithNumSlots(rdd, resourceProfile)
     checkBarrierStageWithRDDChainPattern(rdd, partitions.toSet.size)
+
+    // 获取上一级的依赖
     val parents = getOrCreateParentStages(shuffleDeps, jobId)
     val id = nextStageId.getAndIncrement()
+
+    // 在代码中什么都不做的情况下回直接创建一个阶段
     val stage = new ResultStage(id, rdd, func, partitions, parents, jobId,
       callSite, resourceProfile.id)
     stageIdToStage(id) = stage
@@ -637,6 +645,7 @@ private[spark] class DAGScheduler(
   private def getOrCreateParentStages(shuffleDeps: HashSet[ShuffleDependency[_, _, _]],
       firstJobId: Int): List[Stage] = {
     shuffleDeps.map { shuffleDep =>
+      // 根据 shuffle 依赖转换成一个新的阶段
       getOrCreateShuffleMapStage(shuffleDep, firstJobId)
     }.toList
   }
@@ -693,6 +702,7 @@ private[spark] class DAGScheduler(
         Option(toVisit.getResourceProfile).foreach(resourceProfiles += _)
         toVisit.dependencies.foreach {
           case shuffleDep: ShuffleDependency[_, _, _] =>
+            // 匹配 shuffle 依赖
             parents += shuffleDep
           case dependency =>
             waitingForVisit.prepend(dependency.rdd)
@@ -930,7 +940,11 @@ private[spark] class DAGScheduler(
     assert(partitions.nonEmpty)
     val func2 = func.asInstanceOf[(TaskContext, Iterator[_]) => _]
     val waiter = new JobWaiter[U](this, jobId, partitions.size, resultHandler)
-    eventProcessLoop.post(JobSubmitted(
+
+
+    eventProcessLoop.post(
+      // JobSubmitted 将作业提交，交由 org.apache.spark.scheduler.DAGScheduler.handleJobSubmitted 处理
+      JobSubmitted(
       jobId, rdd, func2, partitions.toArray, callSite, waiter,
       Utils.cloneProperties(properties)))
     waiter
@@ -958,7 +972,10 @@ private[spark] class DAGScheduler(
       resultHandler: (Int, U) => Unit,
       properties: Properties): Unit = {
     val start = System.nanoTime
+
+    // submitJob 提交作业
     val waiter = submitJob(rdd, func, partitions, callSite, resultHandler, properties)
+
     ThreadUtils.awaitReady(waiter.completionFuture, Duration.Inf)
     waiter.completionFuture.value.get match {
       case scala.util.Success(_) =>
@@ -1239,6 +1256,8 @@ private[spark] class DAGScheduler(
     try {
       // New stage creation may throw an exception if, for example, jobs are run on a
       // HadoopRDD whose underlying HDFS files have been deleted.
+
+      // 划分阶段
       finalStage = createResultStage(finalRDD, func, partitions, jobId, callSite)
     } catch {
       case e: BarrierJobSlotsNumberCheckFailed =>
