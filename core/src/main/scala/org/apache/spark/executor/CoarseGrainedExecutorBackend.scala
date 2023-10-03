@@ -78,6 +78,7 @@ private[spark] class CoarseGrainedExecutorBackend(
   private var decommissioned = false
 
   override def onStart(): Unit = {
+    // 收到自己的消息并处理
     if (env.conf.get(DECOMMISSION_ENABLED)) {
       val signal = env.conf.get(EXECUTOR_DECOMMISSION_SIGNAL)
       logInfo(s"Registering SIG$signal handler to trigger decommissioning.")
@@ -103,12 +104,22 @@ private[spark] class CoarseGrainedExecutorBackend(
     }
     rpcEnv.asyncSetupEndpointRefByURI(driverUrl).flatMap { ref =>
       // This is a very fast action so we can use "ThreadUtils.sameThread"
+
+      // 获取到 driver
       driver = Some(ref)
       env.executorBackend = Option(this)
-      ref.ask[Boolean](RegisterExecutor(executorId, self, hostname, cores, extractLogUrls,
+      // 向 driver 发送一个请求
+      ref.ask[Boolean](
+        // 向 driver 发送一个请求，将当前的 Executor 注册到 Diver
+        // Driver 就是 org.apache.spark.SparkContext
+        // Driver 收到信息后会通过其后台 org.apache.spark.scheduler.SchedulerBackend 处理
+        // 具体的是通过 org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend.DriverEndpoint.receiveAndReply 处理
+        RegisterExecutor(executorId, self, hostname, cores, extractLogUrls,
         extractAttributes, _resources, resourceProfile.id))
     }(ThreadUtils.sameThread).onComplete {
       case Success(_) =>
+        // 注册成功后给自己发一个信息，表示注册完毕
+        // 发送的消息交由自己的 org.apache.spark.executor.CoarseGrainedExecutorBackend.receive 处理
         self.send(RegisteredExecutor)
       case Failure(e) =>
         exitExecutor(1, s"Cannot register with driver: $driverUrl", e, notifyDriver = false)
@@ -170,8 +181,11 @@ private[spark] class CoarseGrainedExecutorBackend(
     case RegisteredExecutor =>
       logInfo("Successfully registered with driver")
       try {
+        // 注册成功后创建一个 Executor
         executor = new Executor(executorId, hostname, env, getUserClassPath, isLocal = false,
           resources = _resources)
+        // 向 driver 发送启动 Executor
+        // 最终有 driver 的通信后台 org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend.DriverEndpoint.receive 处理
         driver.get.send(LaunchedExecutor(executorId))
       } catch {
         case NonFatal(e) =>
@@ -431,6 +445,8 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
 
       // Bootstrap to fetch the driver's Spark properties.
       val executorConf = new SparkConf
+
+      // 该 fetcher 会去找 driver
       val fetcher = RpcEnv.create(
         "driverPropsFetcher",
         arguments.bindAddress,
@@ -473,6 +489,8 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       }
 
       driverConf.set(EXECUTOR_ID, arguments.executorId)
+
+      // 创建运行环境
       val env = SparkEnv.createExecutorEnv(driverConf, arguments.executorId, arguments.bindAddress,
         arguments.hostname, arguments.cores, cfg.ioEncryptionKey, isLocal = false)
       // Set the application attemptId in the BlockStoreClient if available.
@@ -481,6 +499,8 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
         env.blockManager.blockStoreClient.setAppAttemptId(attemptId)
       )
       val backend = backendCreateFn(env.rpcEnv, arguments, env, cfg.resourceProfile)
+
+      // 设置一个通信终端，名字为 Executor
       env.rpcEnv.setupEndpoint("Executor", backend)
       arguments.workerUrl.foreach { url =>
         env.rpcEnv.setupEndpoint("WorkerWatcher",

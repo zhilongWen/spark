@@ -80,6 +80,8 @@ private[spark] object YarnCoarseGrainedExecutorBackend extends Logging {
     }
     val backendArgs = CoarseGrainedExecutorBackend.parseArguments(args,
       this.getClass.getCanonicalName.stripSuffix("$"))
+
+    // 运行 CoarseGrainedExecutorBackend
     CoarseGrainedExecutorBackend.run(backendArgs, createFn)
     System.exit(0)
   }

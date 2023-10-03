@@ -138,6 +138,11 @@ class SparkSubmitOptionParser {
    * @throws IllegalArgumentException If an error is found during parsing.
    */
   protected final void parse(List<String> args) {
+
+    // --class org.apache.spark.examples.SparkPi \
+    // --master yarn \
+    // --deploy-mode cluster \
+    // ./examples/jars/spark-examples_2.12-3.4.1.jar 10
     Pattern eqSeparatedOpt = Pattern.compile("(--[^=]+)=(.+)");
 
     int idx = 0;
@@ -145,12 +150,15 @@ class SparkSubmitOptionParser {
       String arg = args.get(idx);
       String value = null;
 
+      // 无法匹配
       Matcher m = eqSeparatedOpt.matcher(arg);
       if (m.matches()) {
         arg = m.group(1);
         value = m.group(2);
       }
 
+
+      // 匹配
       // Look for options with a value.
       String name = findCliOption(arg, opts);
       if (name != null) {
@@ -161,7 +169,14 @@ class SparkSubmitOptionParser {
           }
           idx++;
           value = args.get(idx);
+          // arg = --class           value = org.apache.spark.examples.SparkPi
+          // arg = --master          value = yarn
+          // arg = --deploy-mode     value = cluster
         }
+        // 通过提交的参数设置属性
+        // --class
+        // --master
+        // --deploy-model
         if (!handle(name, value)) {
           break;
         }

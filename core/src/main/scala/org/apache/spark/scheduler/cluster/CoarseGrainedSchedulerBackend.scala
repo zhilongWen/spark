@@ -152,6 +152,9 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     }
 
     override def receive: PartialFunction[Any, Unit] = {
+
+          // 接收消息
+
       case StatusUpdate(executorId, taskId, state, data, taskCpus, resources) =>
         scheduler.statusUpdate(taskId, state, data.value)
         if (TaskState.isFinished(state)) {
@@ -216,6 +219,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         removeWorker(workerId, host, message)
 
       case LaunchedExecutor(executorId) =>
+        // 处理来自 executor 后台（org.apache.spark.executor.CoarseGrainedExecutorBackend.receive）
+        // 的 LaunchedExecutor 消息
         executorDataMap.get(executorId).foreach { data =>
           data.freeCores = data.totalCores
         }
@@ -230,6 +235,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     }
 
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
+
+          // 处理并回复接收到的消息
 
       case RegisterExecutor(executorId, executorRef, hostname, cores, logUrls,
           attributes, resources, resourceProfileId) =>

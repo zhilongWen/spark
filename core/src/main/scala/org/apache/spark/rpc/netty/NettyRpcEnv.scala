@@ -133,6 +133,7 @@ private[netty] class NettyRpcEnv(
   }
 
   override def setupEndpoint(name: String, endpoint: RpcEndpoint): RpcEndpointRef = {
+    // 注册 RPC 的通信终端
     dispatcher.registerRpcEndpoint(name, endpoint)
   }
 

@@ -37,6 +37,7 @@ import org.apache.spark.util.Utils
  */
 private[spark] class YarnRMClient extends Logging {
 
+  // 创建一个 ResourceManager 和 ApplicationMaster 通信的客户端 amClient
   private var amClient: AMRMClient[ContainerRequest] = _
   private var uiHistoryAddress: String = _
   private var registered: Boolean = false

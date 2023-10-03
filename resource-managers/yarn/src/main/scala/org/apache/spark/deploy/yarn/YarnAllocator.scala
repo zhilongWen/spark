@@ -422,8 +422,10 @@ private[yarn] class YarnAllocator(
     val progressIndicator = 0.1f
     // Poll the ResourceManager. This doubles as a heartbeat if there are no pending container
     // requests.
+    // 获取所有可用资源
     val allocateResponse = amClient.allocate(progressIndicator)
 
+    // 获取所有可用资源容器
     val allocatedContainers = allocateResponse.getAllocatedContainers()
     allocatorNodeHealthTracker.setNumClusterNodes(allocateResponse.getNumClusterNodes)
 
@@ -440,6 +442,7 @@ private[yarn] class YarnAllocator(
           getNumExecutorsStarting,
           allocateResponse.getAvailableResources))
 
+      // 处理可用户分配的容器
       handleAllocatedContainers(allocatedContainers.asScala.toSeq)
     }
 
@@ -625,6 +628,7 @@ private[yarn] class YarnAllocator(
   def handleAllocatedContainers(allocatedContainers: Seq[Container]): Unit = {
     val containersToUse = new ArrayBuffer[Container](allocatedContainers.size)
 
+    // 整理资源
     // Match incoming requests by host
     val remainingAfterHostMatches = new ArrayBuffer[Container]
     for (allocatedContainer <- allocatedContainers) {
@@ -683,6 +687,7 @@ private[yarn] class YarnAllocator(
       }
     }
 
+    // 运行已分配的容器
     runAllocatedContainers(containersToUse)
 
     logInfo("Received %d containers from YARN, launching executors on %d of them."
@@ -731,6 +736,8 @@ private[yarn] class YarnAllocator(
    * Launches executors in the allocated containers.
    */
   private def runAllocatedContainers(containersToUse: ArrayBuffer[Container]): Unit = synchronized {
+
+    // 遍历可使用的容器
     for (container <- containersToUse) {
       val rpId = getResourceProfileIdFromPriority(container.getPriority)
       executorIdCounter += 1
@@ -765,9 +772,15 @@ private[yarn] class YarnAllocator(
       val containerCores = rp.getExecutorCores.getOrElse(defaultCores)
 
       val rpRunningExecs = getOrUpdateRunningExecutorForRPId(rpId).size
+
+      // 判断需要的容器数量和已经启动容器数量
+      // 如果小于，则资源还不够，就需要启动容器
       if (rpRunningExecs < getOrUpdateTargetNumExecutorsForRPId(rpId)) {
         getOrUpdateNumExecutorsStartingForRPId(rpId).incrementAndGet()
         if (launchContainers) {
+          // 通过线程的方式启动容器 ExecutorRunnable（Executor）
+          // 在创建 Executor 时会在容器中创建一个 NodeManager 通信的 client
+          // 连接一台 NodeManager，并在其上启动一个 Executor
           launcherPool.execute(() => {
             try {
               new ExecutorRunnable(

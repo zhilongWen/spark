@@ -76,7 +76,10 @@ private[netty] class Inbox(val endpointName: String, val endpoint: RpcEndpoint)
 
   // OnStart should be the first message to process
   inbox.synchronized {
-    messages.add(OnStart)
+    messages.add(
+      // OnStart 将消息发送给自己
+      OnStart
+    )
   }
 
   /**

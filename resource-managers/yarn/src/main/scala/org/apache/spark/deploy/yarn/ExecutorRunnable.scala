@@ -59,9 +59,11 @@ private[yarn] class ExecutorRunnable(
 
   def run(): Unit = {
     logDebug("Starting Executor Container")
+    // 创建一个 NodeManager 通信的 client
     nmClient = NMClient.createNMClient()
     nmClient.init(conf)
     nmClient.start()
+    // 创建启动容器的命令
     startContainer()
   }
 
@@ -95,6 +97,8 @@ private[yarn] class ExecutorRunnable(
     credentials.writeTokenStorageToStream(dob)
     ctx.setTokens(ByteBuffer.wrap(dob.getData()))
 
+    // 准备启动 YarnCoarseGrainedExecutorBackend 进程的指令
+    // $JAVA_HONE /bin/java org.apache.spark.executor.YarnCoarseGrainedExecutorBackend
     val commands = prepareCommand()
 
     ctx.setCommands(commands.asJava)
@@ -120,6 +124,7 @@ private[yarn] class ExecutorRunnable(
 
     // Send the start request to the ContainerManager
     try {
+      // 在一个 NodeManager 中启动一个 Executor
       nmClient.startContainer(container.get, ctx)
     } catch {
       case ex: Exception =>
@@ -162,6 +167,7 @@ private[yarn] class ExecutorRunnable(
     // For log4j configuration to reference
     javaOpts += ("-Dspark.yarn.app.container.log.dir=" + ApplicationConstants.LOG_DIR_EXPANSION_VAR)
 
+    // 准备启动 YarnCoarseGrainedExecutorBackend 进程的指令
     YarnSparkHadoopUtil.addOutOfMemoryErrorArgument(javaOpts)
     val commands = prefixEnv ++
       Seq(Environment.JAVA_HOME.$$() + "/bin/java", "-server") ++

@@ -108,6 +108,11 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
   }
 
   // Set parameters from command line arguments
+  // --class org.apache.spark.examples.SparkPi \
+  // --master yarn \
+  // --deploy-mode cluster \
+  // ./examples/jars/spark-examples_2.12-3.4.1.jar 10
+  // 解析命令行中的参数
   parse(args.asJava)
 
   // Populate `sparkProperties` map from properties file
@@ -349,12 +354,15 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
         maybeMaster = Option(value)
 
       case REMOTE =>
+        // --master yarn
         maybeRemote = Option(value)
 
       case CLASS =>
+        // --class org.apache.spark.examples.SparkPi
         mainClass = value
 
       case DEPLOY_MODE =>
+        // --deploy-mode cluster
         if (value != "client" && value != "cluster") {
           error("--deploy-mode must be either \"client\" or \"cluster\"")
         }

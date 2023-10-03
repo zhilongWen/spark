@@ -59,9 +59,9 @@ import org.apache.spark.util._
  * Common application master functionality for Spark on Yarn.
  */
 private[spark] class ApplicationMaster(
-    args: ApplicationMasterArguments,
-    sparkConf: SparkConf,
-    yarnConf: YarnConfiguration) extends Logging {
+                                        args: ApplicationMasterArguments,
+                                        sparkConf: SparkConf,
+                                        yarnConf: YarnConfiguration) extends Logging {
 
   // TODO: Currently, task to container is computed once (TaskSetManager) - which need not be
   // optimal as more containers are available. Might need to handle this better.
@@ -98,6 +98,7 @@ private[spark] class ApplicationMaster(
     }
   }
 
+  // 创建一个 ResourceManager 和 ApplicationMaster 通信的客户端 amClient
   private val client = new YarnRMClient()
 
   // Default to twice the number of executors (twice the maximum number of executors if dynamic
@@ -164,11 +165,11 @@ private[spark] class ApplicationMaster(
     val resources = HashMap[String, LocalResource]()
 
     def setupDistributedCache(
-        file: String,
-        rtype: LocalResourceType,
-        timestamp: String,
-        size: String,
-        vis: String): Unit = {
+                               file: String,
+                               rtype: LocalResourceType,
+                               timestamp: String,
+                               size: String,
+                               vis: String): Unit = {
       val uri = new URI(file)
       val amJarRsrc = Records.newRecord(classOf[LocalResource])
       amJarRsrc.setType(rtype)
@@ -190,7 +191,7 @@ private[spark] class ApplicationMaster(
     for (i <- distFiles.indices) {
       val resType = LocalResourceType.valueOf(resTypes(i))
       setupDistributedCache(distFiles(i), resType, timeStamps(i).toString, fileSizes(i).toString,
-      visibilities(i))
+        visibilities(i))
     }
 
     // Distribute the conf archive to executors.
@@ -281,8 +282,10 @@ private[spark] class ApplicationMaster(
       }
 
       if (isClusterMode) {
+        // 集群模式创建的 Driver
         runDriver()
       } else {
+        // 其他模式创建的是 ExecutorLauncher
         runExecutorLauncher()
       }
     } catch {
@@ -308,10 +311,10 @@ private[spark] class ApplicationMaster(
   }
 
   def runUnmanaged(
-      clientRpcEnv: RpcEnv,
-      appAttemptId: ApplicationAttemptId,
-      stagingDir: Path,
-      cachedResourcesConf: SparkConf): Unit = {
+                    clientRpcEnv: RpcEnv,
+                    appAttemptId: ApplicationAttemptId,
+                    stagingDir: Path,
+                    cachedResourcesConf: SparkConf): Unit = {
     try {
       new CallerContext(
         "APPMASTER", sparkConf.get(APP_CALLER_CONTEXT),
@@ -438,11 +441,11 @@ private[spark] class ApplicationMaster(
   }
 
   private def registerAM(
-      host: String,
-      port: Int,
-      _sparkConf: SparkConf,
-      uiAddress: Option[String],
-      appAttempt: ApplicationAttemptId): Unit = {
+                          host: String,
+                          port: Int,
+                          _sparkConf: SparkConf,
+                          uiAddress: Option[String],
+                          appAttempt: ApplicationAttemptId): Unit = {
     val appId = appAttempt.getApplicationId().toString()
     val attemptId = appAttempt.getAttemptId().toString()
     val historyAddress = ApplicationMaster
@@ -453,11 +456,11 @@ private[spark] class ApplicationMaster(
   }
 
   private def createAllocator(
-      driverRef: RpcEndpointRef,
-      _sparkConf: SparkConf,
-      rpcEnv: RpcEnv,
-      appAttemptId: ApplicationAttemptId,
-      distCacheConf: SparkConf): Unit = {
+                               driverRef: RpcEndpointRef,
+                               _sparkConf: SparkConf,
+                               rpcEnv: RpcEnv,
+                               appAttemptId: ApplicationAttemptId,
+                               distCacheConf: SparkConf): Unit = {
     // In client mode, the AM may be restarting after delegation tokens have reached their TTL. So
     // always contact the driver to get the current set of valid tokens, so that local resources can
     // be initialized below.
@@ -485,6 +488,8 @@ private[spark] class ApplicationMaster(
       dummyRunner.launchContextDebugInfo()
     }
 
+    // client = YarnRMClient
+    // 申请资源
     allocator = client.createAllocator(
       yarnConf,
       _sparkConf,
@@ -502,7 +507,10 @@ private[spark] class ApplicationMaster(
       logInfo("Initializing service data for shuffle service using name '" +
         s"${_sparkConf.get(SHUFFLE_SERVICE_NAME)}'")
     }
+
+    // 获取可用资源列表
     allocator.allocateResources()
+
     val ms = MetricsSystem.createMetricsSystem(MetricsSystemInstances.APPLICATION_MASTER, sparkConf)
     val prefix = _sparkConf.get(YARN_METRICS_NAMESPACE).getOrElse(appId)
     ms.registerSource(new ApplicationMasterSource(prefix, allocator))
@@ -514,6 +522,8 @@ private[spark] class ApplicationMaster(
 
   private def runDriver(): Unit = {
     addAmIpFilter(None, System.getenv(ApplicationConstants.APPLICATION_WEB_PROXY_BASE_ENV))
+
+    // 启动用户应用程序
     userClassThread = startUserApplication()
 
     // This a bit hacky, but we need to wait until the spark.driver.port property has
@@ -521,6 +531,10 @@ private[spark] class ApplicationMaster(
     logInfo("Waiting for spark context initialization...")
     val totalWaitTime = sparkConf.get(AM_MAX_WAIT_TIME)
     try {
+
+      // 该线路创建资源
+
+      // 等待启动程序的上下文环境
       val sc = ThreadUtils.awaitResult(sparkContextPromise.future,
         Duration(totalWaitTime, TimeUnit.MILLISECONDS))
       if (sc != null) {
@@ -529,24 +543,33 @@ private[spark] class ApplicationMaster(
         val userConf = sc.getConf
         val host = userConf.get(DRIVER_HOST_ADDRESS)
         val port = userConf.get(DRIVER_PORT)
+
+        // 将 ApplicationMaster 通过 YarnRMClient 注册到 ResourceManager 中，并申请资源
         registerAM(host, port, userConf, sc.ui.map(_.webUrl), appAttemptId)
 
         val driverRef = rpcEnv.setupEndpointRef(
           RpcAddress(host, port),
           YarnSchedulerBackend.ENDPOINT_NAME)
+
+        // 获取资源
         createAllocator(driverRef, userConf, rpcEnv, appAttemptId, distCacheConf)
       } else {
         // Sanity check; should never happen in normal operation, since sc should only be null
         // if the user app did not create a SparkContext.
         throw new IllegalStateException("User did not initialize spark context!")
       }
+
+
+      // 该线路执行计算（主程序继续执行）
       resumeDriver()
       userClassThread.join()
+
+
     } catch {
       case e: SparkException if e.getCause().isInstanceOf[TimeoutException] =>
         logError(
           s"SparkContext did not initialize after waiting for $totalWaitTime ms. " +
-           "Please check earlier log output for errors. Failing the application.")
+            "Please check earlier log output for errors. Failing the application.")
         finish(FinalApplicationStatus.FAILED,
           ApplicationMaster.EXIT_SC_NOT_INITED,
           "Timed out waiting for SparkContext.")
@@ -640,7 +663,7 @@ private[spark] class ApplicationMaster(
         if (sleepDuration < TimeUnit.MILLISECONDS.toNanos(sleepInterval)) {
           // log when sleep is interrupted
           logDebug(s"Number of pending allocations is $numPendingAllocate. " +
-              s"Slept for $sleepDuration/$sleepInterval ms.")
+            s"Slept for $sleepDuration/$sleepInterval ms.")
           // if sleep was less than the minimum interval, sleep for the rest of it
           val toSleep = math.max(0, initialAllocationInterval - sleepDuration)
           if (toSleep > 0) {
@@ -652,7 +675,7 @@ private[spark] class ApplicationMaster(
           }
         } else {
           logDebug(s"Number of pending allocations is $numPendingAllocate. " +
-              s"Slept for $sleepDuration/$sleepInterval.")
+            s"Slept for $sleepDuration/$sleepInterval.")
         }
       } catch {
         case e: InterruptedException =>
@@ -674,7 +697,7 @@ private[spark] class ApplicationMaster(
     t.setName("Reporter")
     t.start()
     logInfo(s"Started progress reporter thread with (heartbeat : $heartbeatInterval, " +
-            s"initial allocation : $initialAllocationInterval) intervals")
+      s"initial allocation : $initialAllocationInterval) intervals")
     t
   }
 
@@ -740,13 +763,17 @@ private[spark] class ApplicationMaster(
       userArgs = Seq(args.primaryPyFile, "") ++ userArgs
     }
     if (args.primaryRFile != null &&
-        (args.primaryRFile.endsWith(".R") || args.primaryRFile.endsWith(".r"))) {
+      (args.primaryRFile.endsWith(".R") || args.primaryRFile.endsWith(".r"))) {
       // TODO(davies): add R dependencies here
     }
 
+    //    --jar ./examples/jars/spark-examples_2.11-2.1.1.jar
+    //    --class org.apache.spark.examples.SparkPi
     val mainMethod = userClassLoader.loadClass(args.userClass)
       .getMethod("main", classOf[Array[String]])
 
+    // 创建一个 Driver 线程并启动
+    // 在 Driver 线程中初始化 SparkContext 上下文对象
     val userThread = new Thread {
       override def run(): Unit = {
         try {
@@ -754,6 +781,7 @@ private[spark] class ApplicationMaster(
             logError(s"Could not find static main method in object ${args.userClass}")
             finish(FinalApplicationStatus.FAILED, ApplicationMaster.EXIT_EXCEPTION_USER_CLASS)
           } else {
+            // 调用 --class org.apache.spark.examples.SparkPi 的 main 方法
             mainMethod.invoke(null, userArgs.toArray)
             finish(FinalApplicationStatus.SUCCEEDED, ApplicationMaster.EXIT_SUCCESS)
             logDebug("Done running user class")
@@ -762,7 +790,7 @@ private[spark] class ApplicationMaster(
           case e: InvocationTargetException =>
             e.getCause match {
               case _: InterruptedException =>
-                // Reporter thread can interrupt to stop user class
+              // Reporter thread can interrupt to stop user class
               case SparkUserAppException(exitCode) =>
                 val msg = s"User application exited with status $exitCode"
                 logError(msg)
@@ -901,8 +929,16 @@ object ApplicationMaster extends Logging {
 
   private var master: ApplicationMaster = _
 
+  // spark 通过 yarnClient 向 ResourceManager 提交作业后
+  // ResourceManager 会在一个 NodeManager 中启动一个 ApplicationMaster 进程
+  // 通过该入口类启动 ApplicationMaster
   def main(args: Array[String]): Unit = {
+
+    //    --jar ./examples/jars/spark-examples_2.11-2.1.1.jar
+    //    --class org.apache.spark.examples.SparkPi
+
     SignalUtils.registerLogger(log)
+    // 解析传入的参数
     val amArgs = new ApplicationMasterArguments(args)
     val sparkConf = new SparkConf()
     if (amArgs.propertiesFile != null) {
@@ -919,7 +955,9 @@ object ApplicationMaster extends Logging {
       sys.props(k) = v
     }
 
+    // 配置环境信息
     val yarnConf = new YarnConfiguration(SparkHadoopUtil.newConfiguration(sparkConf))
+    // 创建 ApplicationMaster 并启动一个 ApplicationMaster 与 ResourceManager 通信的客户端
     master = new ApplicationMaster(amArgs, sparkConf, yarnConf)
 
     val ugi = sparkConf.get(PRINCIPAL) match {
@@ -951,7 +989,10 @@ object ApplicationMaster extends Logging {
     }
 
     ugi.doAs(new PrivilegedExceptionAction[Unit]() {
-      override def run(): Unit = System.exit(master.run())
+      override def run(): Unit = System.exit(
+        // 启动 ApplicationMaster
+        master.run()
+      )
     })
   }
 
@@ -964,10 +1005,10 @@ object ApplicationMaster extends Logging {
   }
 
   private[spark] def getHistoryServerAddress(
-      sparkConf: SparkConf,
-      yarnConf: YarnConfiguration,
-      appId: String,
-      attemptId: String): String = {
+                                              sparkConf: SparkConf,
+                                              yarnConf: YarnConfiguration,
+                                              appId: String,
+                                              attemptId: String): String = {
     sparkConf.get(HISTORY_SERVER_ADDRESS)
       .map { text => SparkHadoopUtil.get.substituteHadoopVariables(text, yarnConf) }
       .map { address => s"${address}${HistoryServer.UI_PATH_PREFIX}/${appId}/${attemptId}" }
