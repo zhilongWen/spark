@@ -1580,12 +1580,18 @@ class SparkContext(config: SparkConf) extends Logging {
                                                      value: T,
                                                      serializedOnly: Boolean): Broadcast[T] = {
     assertNotStopped()
+
+    // 不能直接广播rdd等分布式变量
     require(!classOf[RDD[_]].isAssignableFrom(classTag[T].runtimeClass),
       "Can not directly broadcast RDDs; instead, call collect() and broadcast the result.")
+
+    // 通过BroadcastManager工具类来创建一个BroadcastFactory对象
     val bc = env.broadcastManager.newBroadcast[T](value, isLocal, serializedOnly)
     val callSite = getCallSite
     logInfo("Created broadcast " + bc.id + " from " + callSite.shortForm)
     cleaner.foreach(_.registerBroadcastForCleanup(bc))
+
+    // 返回Broadcast对象，这里其实是TorrentBroadcast类的对象
     bc
   }
 

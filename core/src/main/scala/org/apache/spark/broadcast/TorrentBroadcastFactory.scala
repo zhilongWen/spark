@@ -30,6 +30,7 @@ private[spark] class TorrentBroadcastFactory extends BroadcastFactory {
 
   override def initialize(isDriver: Boolean, conf: SparkConf): Unit = { }
 
+  // 调用创建一个TorrentBroadcast对象
   override def newBroadcast[T: ClassTag](
       value_ : T,
       isLocal: Boolean,
@@ -41,6 +42,7 @@ private[spark] class TorrentBroadcastFactory extends BroadcastFactory {
   override def stop(): Unit = { }
 
   /**
+   * 删除广播变量
    * Remove all persisted state associated with the torrent broadcast with the given ID.
    * @param removeFromDriver Whether to remove state from the driver.
    * @param blocking Whether to block until unbroadcasted

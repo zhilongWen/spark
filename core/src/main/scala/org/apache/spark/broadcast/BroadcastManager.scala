@@ -32,6 +32,7 @@ import org.apache.spark.internal.Logging
 private[spark] class BroadcastManager(
     val isDriver: Boolean, conf: SparkConf) extends Logging {
 
+  // 是否已经初始
   private var initialized = false
   private var broadcastFactory: BroadcastFactory = null
 
@@ -41,8 +42,11 @@ private[spark] class BroadcastManager(
   private def initialize(): Unit = {
     synchronized {
       if (!initialized) {
+        // 初始化broadcastFactory变量，这里创建了TorrentBroadcastFactory对象
         broadcastFactory = new TorrentBroadcastFactory
+        // 调用TorrentBroadcastFactory的initialize函数来初始化
         broadcastFactory.initialize(isDriver, conf)
+        // 把initialized设置为true，同一个对象只初始化一次
         initialized = true
       }
     }
@@ -52,6 +56,7 @@ private[spark] class BroadcastManager(
     broadcastFactory.stop()
   }
 
+  // 生成广播变量的id，该id是唯一的，这里先初始化，会在创建broadcast变量时进行自增操作
   private val nextBroadcastId = new AtomicLong(0)
 
   private[broadcast] val cachedValues =
