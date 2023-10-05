@@ -201,20 +201,34 @@ class SparkContext(config: SparkConf) extends Logging {
    | constructor is still running is safe.                                                 |
    * ------------------------------------------------------------------------------------- */
 
+  // 配置对象：基础的配置
   private var _conf: SparkConf = _
+
   private var _eventLogDir: Option[URI] = None
   private var _eventLogCodec: Option[String] = None
   private var _listenerBus: LiveListenerBus = _
+
+  // 环境对象：通信环境
   private var _env: SparkEnv = _
+
   private var _statusTracker: SparkStatusTracker = _
   private var _progressBar: Option[ConsoleProgressBar] = None
   private var _ui: Option[SparkUI] = None
   private var _hadoopConfiguration: Configuration = _
   private var _executorMemory: Int = _
+
+  // (Driver) 通信后台：主要用于与 Executor 之间进行通信
   private var _schedulerBackend: SchedulerBackend = _
+
+  // 任务调度：主要用于任务的调度
   private var _taskScheduler: TaskScheduler = _
+
   private var _heartbeatReceiver: RpcEndpointRef = _
+
+  // 阶段调度器：主要用于阶段的划分以及任务的切分
   @volatile private var _dagScheduler: DAGScheduler = _
+
+
   private var _applicationId: String = _
   private var _applicationAttemptId: Option[String] = None
   private var _eventLogger: Option[EventLoggingListener] = None

@@ -102,6 +102,8 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
   override def compute(split: Partition, context: TaskContext): Iterator[(K, C)] = {
     val dep = dependencies.head.asInstanceOf[ShuffleDependency[K, V, C]]
     val metrics = context.taskMetrics().createTempShuffleReadMetrics()
+
+    // 读 map 阶段写入磁盘的文件
     SparkEnv.get.shuffleManager.getReader(
       dep.shuffleHandle, split.index, split.index + 1, context, metrics)
       .read()

@@ -301,14 +301,20 @@ private[spark] class Executor(
 
   def launchTask(context: ExecutorBackend, taskDescription: TaskDescription): Unit = {
     val taskId = taskDescription.taskId
+
+    // 处理 task 的任务对象，一个 task 一个线程对象
     val tr = createTaskRunner(context, taskDescription)
+
     runningTasks.put(taskId, tr)
     val killMark = killMarks.get(taskId)
     if (killMark != null) {
       tr.kill(killMark._1, killMark._2)
       killMarks.remove(taskId)
     }
+
+    // 最后将所有待处理的 task 线程对象放入 Executor 的线程池中
     threadPool.execute(tr)
+
     if (decommissioned) {
       log.error(s"Launching a task while in decommissioned state.")
     }
@@ -545,13 +551,21 @@ private[spark] class Executor(
         } else 0L
         var threwException = true
         val value = Utils.tryWithSafeFinally {
+
+          // 运行 task
           val res = task.run(
             taskAttemptId = taskId,
             attemptNumber = taskDescription.attemptNumber,
             metricsSystem = env.metricsSystem,
             cpus = taskDescription.cpus,
             resources = taskDescription.resources,
-            plugins = plugins)
+            plugins = plugins
+          )
+
+
+
+
+
           threwException = false
           res
         } {

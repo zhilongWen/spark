@@ -33,19 +33,24 @@ import org.apache.spark.internal.Logging
  */
 private[spark] abstract class EventLoop[E](name: String) extends Logging {
 
+  // 链表结构端端队列
   private val eventQueue: BlockingQueue[E] = new LinkedBlockingDeque[E]()
 
   private val stopped = new AtomicBoolean(false)
 
   // Exposed for testing.
+  // 设置守护线程，将事件从队列中取出，
+  // 并将事件交由 org.apache.spark.scheduler.DAGSchedulerEventProcessLoop.onReceive 处理
   private[spark] val eventThread = new Thread(name) {
     setDaemon(true)
 
     override def run(): Unit = {
       try {
         while (!stopped.get) {
+          // 将队列中的事件取出
           val event = eventQueue.take()
           try {
+            // 通过 org.apache.spark.scheduler.DAGSchedulerEventProcessLoop.onReceive 处理对应的事件
             onReceive(event)
           } catch {
             case NonFatal(e) =>
@@ -102,6 +107,7 @@ private[spark] abstract class EventLoop[E](name: String) extends Logging {
   def post(event: E): Unit = {
     if (!stopped.get) {
       if (eventThread.isAlive) {
+        // 将事件放入队列中
         eventQueue.put(event)
       } else {
         onError(new IllegalStateException(s"$name has already been stopped accidentally."))

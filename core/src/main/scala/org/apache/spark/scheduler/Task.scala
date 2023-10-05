@@ -136,7 +136,11 @@ private[spark] abstract class Task[T](
     plugins.foreach(_.onTaskStart())
 
     try {
+
+      // 运行并监听 task
       context.runTaskWithListeners(this)
+
+
     } finally {
       try {
         Utils.tryLogNonFatalError {

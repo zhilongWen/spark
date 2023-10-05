@@ -95,7 +95,19 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
   override def registerShuffle[K, V, C](
       shuffleId: Int,
       dependency: ShuffleDependency[K, V, C]): ShuffleHandle = {
+
+
+//     SerializedShuffleHandle       ->  UnsafeShuffleWriter
+//     BypassMergeSortShuffleHandle  ->  BypassMergeSortShuffleWriter
+//     BaseShuffleHandle             ->  SortShuffleWriter
+//
+
     if (SortShuffleWriter.shouldBypassMergeSort(conf, dependency)) {
+      // 满足条件：
+      //  1、不能有 map 端预聚合
+      //  2、下游分区数 <= spark.shuffle.sort.bypassMergeThreshold 参数（200 默认）
+
+
       // If there are fewer than spark.shuffle.sort.bypassMergeThreshold partitions and we don't
       // need map-side aggregation, then write numPartitions files directly and just concatenate
       // them at the end. This avoids doing serialization and deserialization twice to merge
@@ -103,11 +115,20 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
       // having multiple files open at a time and thus more memory allocated to buffers.
       new BypassMergeSortShuffleHandle[K, V](
         shuffleId, dependency.asInstanceOf[ShuffleDependency[K, V, V]])
+
+
     } else if (SortShuffleManager.canUseSerializedShuffle(dependency)) {
+
+      // 满足条件
+      //  1、序列化规则支持重定向操作（java 的不支持，kryo 的支持）
+      //  2、不能使用 map 端预聚合
+      //  3、下游的分区数 <= 16777216
+
       // Otherwise, try to buffer map outputs in a serialized form, since this is more efficient:
       new SerializedShuffleHandle[K, V](
         shuffleId, dependency.asInstanceOf[ShuffleDependency[K, V, V]])
     } else {
+
       // Otherwise, buffer map outputs in a deserialized form:
       new BaseShuffleHandle(shuffleId, dependency)
     }
@@ -156,6 +177,16 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
       handle.shuffleId, _ => new OpenHashSet[Long](16))
     mapTaskIds.synchronized { mapTaskIds.add(mapId) }
     val env = SparkEnv.get
+
+
+    // handle 根据  org.apache.spark.shuffle.sort.SortShuffleManager.registerShuffle 方法获取
+
+
+    // SerializedShuffleHandle       ->  UnsafeShuffleWriter
+    // BypassMergeSortShuffleHandle  ->  BypassMergeSortShuffleWriter
+    // BaseShuffleHandle             ->  SortShuffleWriter
+
+
     handle match {
       case unsafeShuffleHandle: SerializedShuffleHandle[K @unchecked, V @unchecked] =>
         new UnsafeShuffleWriter(
@@ -178,6 +209,9 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
       case other: BaseShuffleHandle[K @unchecked, V @unchecked, _] =>
         new SortShuffleWriter(other, mapId, context, shuffleExecutorComponents)
     }
+
+
+
   }
 
   /** Remove a shuffle's metadata from the ShuffleManager. */
@@ -230,15 +264,30 @@ private[spark] object SortShuffleManager extends Logging {
   def canUseSerializedShuffle(dependency: ShuffleDependency[_, _, _]): Boolean = {
     val shufId = dependency.shuffleId
     val numPartitions = dependency.partitioner.numPartitions
+
+    // 满足条件
+    //  1、序列化规则支持重定向操作（java 的不支持，kryo 的支持）
+    //  2、不能使用 map 端预聚合
+    //  3、下游的分区数 <= 16777216
+
     if (!dependency.serializer.supportsRelocationOfSerializedObjects) {
+
+      // 是否支持序列化的重定位，java 的序列化不支持，kryo 的序列化支持
+
       log.debug(s"Can't use serialized shuffle for shuffle $shufId because the serializer, " +
         s"${dependency.serializer.getClass.getName}, does not support object relocation")
       false
     } else if (dependency.mapSideCombine) {
+
+      // map 端预聚合
+
       log.debug(s"Can't use serialized shuffle for shuffle $shufId because we need to do " +
         s"map-side aggregation")
       false
     } else if (numPartitions > MAX_SHUFFLE_OUTPUT_PARTITIONS_FOR_SERIALIZED_MODE) {
+
+      // 分区数 > 16777215 + 1
+
       log.debug(s"Can't use serialized shuffle for shuffle $shufId because it has more than " +
         s"$MAX_SHUFFLE_OUTPUT_PARTITIONS_FOR_SERIALIZED_MODE partitions")
       false

@@ -91,7 +91,9 @@ private[spark] class ShuffleMapStage(
   /** Returns the sequence of partition ids that are missing (i.e. needs to be computed). */
   override def findMissingPartitions(): Seq[Int] = {
     mapOutputTrackerMaster
+      // 获取设置的分区数量
       .findMissingPartitions(shuffleDep.shuffleId)
+      // 没有的话就是默认的分区数量
       .getOrElse(0 until numPartitions)
   }
 }

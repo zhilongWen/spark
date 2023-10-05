@@ -339,6 +339,8 @@ private[spark] class IndexShuffleBlockResolver(
       lengths: Array[Long],
       checksums: Array[Long],
       dataTmp: File): Unit = {
+
+    // 索引文件
     val indexFile = getIndexFile(shuffleId, mapId)
     val indexTmp = createTempFile(indexFile)
 
@@ -354,6 +356,7 @@ private[spark] class IndexShuffleBlockResolver(
     }
 
     try {
+      // 数据文件
       val dataFile = getDataFile(shuffleId, mapId)
       // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
       // the following check and rename are atomic.
@@ -372,9 +375,11 @@ private[spark] class IndexShuffleBlockResolver(
               // index file and data file but failed to write the checksum file. In
               // this case, the current task attempt could write the missing checksum
               // file by itself.
+              // 使用 java DataOutputStream 将数据写到文件中
               writeMetadataFile(checksums, checksumTmpOpt.get, checksumFileOpt.get, false)
             }
           }
+          // 删除临时文件
           if (dataTmp != null && dataTmp.exists()) {
             dataTmp.delete()
           }
@@ -446,6 +451,8 @@ private[spark] class IndexShuffleBlockResolver(
       tmpFile: File,
       targetFile: File,
       propagateError: Boolean): Unit = {
+
+    // 使用 java DataOutputStream 将数据写到文件中
     val out = new DataOutputStream(
       new BufferedOutputStream(
         new FileOutputStream(tmpFile)

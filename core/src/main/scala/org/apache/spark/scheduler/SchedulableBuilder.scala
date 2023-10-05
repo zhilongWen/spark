@@ -52,6 +52,7 @@ private[spark] class FIFOSchedulableBuilder(val rootPool: Pool)
   }
 
   override def addTaskSetManager(manager: Schedulable, properties: Properties): Unit = {
+    // 将任务管理器放入任务池中
     rootPool.addSchedulable(manager)
   }
 }

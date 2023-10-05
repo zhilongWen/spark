@@ -49,14 +49,23 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
       partition: Partition): MapStatus = {
     var writer: ShuffleWriter[Any, Any] = null
     try {
+
+
+      // 从环境中获取 ShuffleManager（SortShuffleManager）
       val manager = SparkEnv.get.shuffleManager
+
+      // 给每个分区都创建一个 ShuffleWriter 对象
       writer = manager.getWriter[Any, Any](
-        dep.shuffleHandle,
+        dep.shuffleHandle, // 获取 shuffleHandle
         mapId,
         context,
         createMetricsReporter(context))
+
+      // 写磁盘操作
       writer.write(
         rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
+
+
       val mapStatus = writer.stop(success = true)
       if (mapStatus.isDefined) {
         // Check if sufficient shuffle mergers are available now for the ShuffleMapTask to push
